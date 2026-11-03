@@ -1,0 +1,6 @@
+{
+  "name": "CryptoAnalyzer - Quantitative Research Lab",
+  "description": "Academic research platform predicting cryptocurrency price movements and market regimes using 7 ML architectures, HMM regimes, and statistical testing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

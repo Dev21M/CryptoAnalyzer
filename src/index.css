@@ -1,0 +1,227 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  code, kbd, samp, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom scrollbars for data tables and charts */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Clean Light Mode Adaptive Support */
+html:not(.dark) body {
+  background-color: #f8fafc;
+  color: #0f172a;
+}
+html:not(.dark) .bg-slate-950 {
+  background-color: #ffffff !important;
+}
+html:not(.dark) .bg-slate-900 {
+  background-color: #f8fafc !important;
+}
+html:not(.dark) .bg-slate-900\/90 {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+}
+html:not(.dark) .bg-slate-900\/80 {
+  background-color: rgba(248, 250, 252, 0.9) !important;
+}
+html:not(.dark) .bg-slate-900\/60 {
+  background-color: rgba(248, 250, 252, 0.8) !important;
+}
+html:not(.dark) .bg-slate-900\/50,
+html:not(.dark) .bg-slate-900\/40 {
+  background-color: #f1f5f9 !important;
+}
+html:not(.dark) .border-slate-800,
+html:not(.dark) .border-slate-800\/80,
+html:not(.dark) .border-slate-800\/60,
+html:not(.dark) .border-slate-800\/50 {
+  border-color: #e2e8f0 !important;
+}
+html:not(.dark) .border-slate-700 {
+  border-color: #cbd5e1 !important;
+}
+html:not(.dark) .text-white {
+  color: #0f172a !important;
+}
+html:not(.dark) .text-slate-100 {
+  color: #1e293b !important;
+}
+html:not(.dark) .text-slate-200 {
+  color: #334155 !important;
+}
+html:not(.dark) .text-slate-300 {
+  color: #475569 !important;
+}
+html:not(.dark) .text-slate-400 {
+  color: #64748b !important;
+}
+html:not(.dark) .hover\:bg-slate-800\/80:hover,
+html:not(.dark) .hover\:bg-slate-800\/60:hover {
+  background-color: #e2e8f0 !important;
+}
+html:not(.dark) .hover\:bg-slate-800\/50:hover,
+html:not(.dark) .hover\:bg-slate-800\/40:hover {
+  background-color: #f1f5f9 !important;
+}
+html:not(.dark) .bg-slate-800 {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Floating Component Animations on Scroll & Ambient Motion */
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(0.5deg);
+  }
+}
+
+@keyframes floatMedium {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes floatDelayed {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-0.5deg);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes subtleShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.animate-float-slow {
+  animation: floatSlow 6s ease-in-out infinite;
+}
+
+.animate-float-medium {
+  animation: floatMedium 4.5s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: floatDelayed 5.5s ease-in-out infinite 1.5s;
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 4s ease-in-out infinite;
+}
+
+/* High-fidelity Floating Card Hover Micro-interaction */
+.card-float {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+  will-change: transform;
+}
+
+.card-float:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 32px -10px rgba(16, 185, 129, 0.12), 0 10px 20px -8px rgba(0, 0, 0, 0.5);
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+html:not(.dark) .card-float:hover {
+  box-shadow: 0 20px 32px -10px rgba(16, 185, 129, 0.15), 0 10px 20px -8px rgba(0, 0, 0, 0.1);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+/* Subtle background cyber grid */
+.bg-cyber-grid {
+  background-size: 36px 36px;
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+html:not(.dark) .bg-cyber-grid {
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+}
+
+/* Glassmorphism helpers */
+.glass-panel {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+

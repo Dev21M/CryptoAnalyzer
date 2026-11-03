@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CryptoAnalyzer — Quantitative Research & ML Forecasting Lab</title>
+    <meta name="description" content="Academic research platform for cryptocurrency price forecasting and market regime analysis using 7 ML architectures and statistical significance testing." />
+    <meta property="og:title" content="CryptoAnalyzer — Quantitative Research & ML Forecasting Lab" />
+    <meta property="og:description" content="Academic research platform for cryptocurrency price forecasting and market regime analysis using 7 ML architectures and statistical significance testing." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Suppress unhandled errors injected by third-party browser extensions and userscripts
+      window.addEventListener('error', function(e) {
+        var src = (e.filename || '') + (e.message || '') + (e.error && e.error.stack ? e.error.stack : '');
+        if (
+          src.indexOf('moz-extension:') !== -1 ||
+          src.indexOf('chrome-extension:') !== -1 ||
+          src.indexOf('safari-extension:') !== -1 ||
+          src.indexOf('.user.js') !== -1 ||
+          src.indexOf('userscripts') !== -1 ||
+          src.indexOf('__f__') !== -1
+        ) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = e.reason ? (e.reason.stack || e.reason.message || String(e.reason)) : '';
+        if (
+          reason.indexOf('moz-extension:') !== -1 ||
+          reason.indexOf('chrome-extension:') !== -1 ||
+          reason.indexOf('.user.js') !== -1 ||
+          reason.indexOf('userscripts') !== -1 ||
+          reason.indexOf('__f__') !== -1
+        ) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/20 selection:text-emerald-300 min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
