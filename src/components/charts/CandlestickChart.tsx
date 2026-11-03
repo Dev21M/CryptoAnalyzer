@@ -12,24 +12,30 @@ interface CandlestickChartProps {
   indicators: TechnicalIndicators;
   pivotPoints?: PivotPoints;
   fibonacci?: FibonacciLevels;
-  activeTimeframe: Timeframe;
-  onTimeframeChange: (tf: Timeframe) => void;
+  activeTimeframe?: Timeframe;
+  onTimeframeChange?: (tf: Timeframe) => void;
   predictedPrice?: number;
   confidenceInterval?: [number, number];
+  height?: number;
+  showMA?: boolean;
+  showBB?: boolean;
 }
 
 export const CandlestickChart: React.FC<CandlestickChartProps> = ({
   candles,
   indicators,
   pivotPoints,
-  activeTimeframe,
+  activeTimeframe = '1h',
   onTimeframeChange,
   predictedPrice,
   confidenceInterval,
+  height,
+  showMA = true,
+  showBB: initialShowBB = false,
 }) => {
-  const [showSMA20, setShowSMA20] = useState(true);
-  const [showEMA50, setShowEMA50] = useState(true);
-  const [showBB, setShowBB] = useState(false);
+  const [showSMA20, setShowSMA20] = useState(showMA);
+  const [showEMA50, setShowEMA50] = useState(showMA);
+  const [showBB, setShowBB] = useState(initialShowBB);
   const [showPivots, setShowPivots] = useState(false);
   const [subChart, setSubChart] = useState<'volume' | 'rsi' | 'macd'>('volume');
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -121,7 +127,7 @@ export const CandlestickChart: React.FC<CandlestickChartProps> = ({
           {timeframes.map((tf) => (
             <button
               key={tf}
-              onClick={() => onTimeframeChange(tf)}
+              onClick={() => onTimeframeChange?.(tf)}
               className={`px-2.5 py-1 text-xs font-mono font-medium rounded-md transition-colors ${
                 activeTimeframe === tf
                   ? 'bg-emerald-600 text-white shadow-sm'

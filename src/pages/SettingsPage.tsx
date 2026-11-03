@@ -140,7 +140,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
             </label>
           </div>
 
-          <div className="flex items-center justify-between py-2">
+          <div className="flex items-center justify-between py-2 border-b border-slate-800">
             <div>
               <div className="text-sm font-medium text-white">Default Quotation Currency</div>
               <div className="text-xs text-slate-400">
@@ -157,6 +157,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
               <option value="GBP">GBP (£)</option>
               <option value="INR">INR (₹)</option>
             </select>
+          </div>
+
+          {/* Real-time Audio Chimes */}
+          <div className="flex items-center justify-between py-2 border-b border-slate-800">
+            <div>
+              <div className="text-sm font-medium text-white">Synthesizer Sound Alerts</div>
+              <div className="text-xs text-slate-400">
+                Play an instant audio chime via Web Audio API when target price triggers
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={currentSettings.enableSoundAlerts ?? true}
+                onChange={(e) => handleSave({ enableSoundAlerts: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
+          </div>
+
+          {/* Advanced Mode */}
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <div className="text-sm font-medium text-white">Advanced Technical Mode</div>
+              <div className="text-xs text-slate-400">
+                Display quantitative metrics, HMM matrix, and raw indicators across pages
+              </div>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={currentSettings.advancedMode ?? false}
+                onChange={(e) => handleSave({ advancedMode: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+            </label>
           </div>
         </div>
       </Card>

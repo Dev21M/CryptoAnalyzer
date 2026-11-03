@@ -4,25 +4,49 @@ import { queryClient } from './services/queryClient';
 import { AuthModal } from './components/auth/AuthModal';
 import { DisclaimerBanner } from './components/common/DisclaimerBanner';
 import { Modal } from './components/common/Modal';
+import { QuickSearchModal } from './components/common/QuickSearchModal';
 import { ToastContainer, ToastMessage } from './components/common/Toast';
 import { Footer } from './components/layout/Footer';
 import { Header } from './components/layout/Header';
+import { Sidebar } from './components/layout/Sidebar';
+
+// Pages
+import { AiIntelligencePage } from './pages/AiIntelligencePage';
+import { AlertsPage } from './pages/AlertsPage';
 import { CoinAnalysisPage } from './pages/CoinAnalysisPage';
+import { ComparePage } from './pages/ComparePage';
+import { DcaCalculatorPage } from './pages/DcaCalculatorPage';
+import { ForecastPage } from './pages/ForecastPage';
+import { HeatmapPage } from './pages/HeatmapPage';
 import { HomePage } from './pages/HomePage';
+import { LearnPage } from './pages/LearnPage';
 import { LoginPage } from './pages/LoginPage';
 import { MarketsPage } from './pages/MarketsPage';
 import { ModelsLabPage } from './pages/ModelsLabPage';
+import { NewsPage } from './pages/NewsPage';
 import { PortfolioPage } from './pages/PortfolioPage';
 import { PredictionsPage } from './pages/PredictionsPage';
+import { ProfilePage } from './pages/ProfilePage';
+import { ProfitCalculatorPage } from './pages/ProfitCalculatorPage';
 import { RegimesPage } from './pages/RegimesPage';
+import { RiskAnalysisPage } from './pages/RiskAnalysisPage';
+import { SentimentPage } from './pages/SentimentPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { SimulatorPage } from './pages/SimulatorPage';
+import { TransactionsPage } from './pages/TransactionsPage';
+import { WatchlistPage } from './pages/WatchlistPage';
+
+// Services
+import { evaluateAlerts, getAlerts } from './services/alertsService';
 import { getCurrentUser, logoutUser, User } from './services/auth';
 import { fetchAllCoinsSummary, getProviderStatus } from './services/marketData';
+import { getPortfolioHoldings } from './services/portfolioService';
 import {
   DEFAULT_SETTINGS,
   getSettings,
   getWatchlist,
   saveSettings,
+  toggleWatchlistSymbol,
 } from './services/storage';
 import { CoinSummary, DataProviderStatus, UserSettings } from './types/crypto';
 
@@ -42,6 +66,13 @@ export default function App() {
   const [isDisclaimerModalOpen, setIsDisclaimerModalOpen] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Navigation & Drawer states
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [activeAlertsCount, setActiveAlertsCount] = useState<number>(() => {
+    return getAlerts().filter((a) => a.active && !a.triggered).length;
+  });
 
   // Toast Helper
   const addToast = (
@@ -84,6 +115,18 @@ export default function App() {
     }
   }, [settings.theme]);
 
+  // Global Ctrl+K / Cmd+K listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchModalOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Handle browser popstate / hashchange for smooth client-side routing
   useEffect(() => {
     const handleLocationChange = () => {
@@ -99,15 +142,38 @@ export default function App() {
   const navigateTo = (route: string) => {
     window.location.hash = route;
     setCurrentRoute(route);
+    setIsSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Initial and periodic market data load
+  // Initial and periodic market data load + Price Alert evaluation
   const loadMarketData = async () => {
     try {
       const summaries = await fetchAllCoinsSummary();
       setCoins(summaries);
       setProviderStatus(getProviderStatus());
+
+      // Price alert check
+      if (summaries && summaries.length > 0) {
+        const priceMap: Record<string, number> = {};
+        const changeMap: Record<string, number> = {};
+        summaries.forEach((c) => {
+          priceMap[c.symbol.toUpperCase()] = c.price;
+          changeMap[c.symbol.toUpperCase()] = c.change24h;
+        });
+
+        const triggered = evaluateAlerts(priceMap, changeMap);
+        if (triggered.length > 0) {
+          triggered.forEach((t) => {
+            addToast(
+              '🎯 Price Alert Triggered',
+              `${t.symbol} has hit your target of $${t.targetPrice.toLocaleString()} (${t.condition}).`,
+              'info'
+            );
+          });
+        }
+        setActiveAlertsCount(getAlerts().filter((a) => a.active && !a.triggered).length);
+      }
     } catch (e) {
       console.error('Failed to load coins summary', e);
     } finally {
@@ -135,6 +201,24 @@ export default function App() {
     );
   };
 
+  const handleSelectCurrency = (curr: 'USD' | 'EUR' | 'GBP' | 'INR') => {
+    const next: UserSettings = { ...settings, currency: curr };
+    setSettings(next);
+    saveSettings(next);
+    addToast('Currency Base Updated', `Base quotation denomination set to ${curr}.`, 'info');
+  };
+
+  const handleToggleWatchlist = (symbol: string) => {
+    const updated = toggleWatchlistSymbol(symbol);
+    setWatchlist(updated);
+    const added = updated.includes(symbol.toUpperCase());
+    addToast(
+      added ? 'Added to Watchlist' : 'Removed from Watchlist',
+      `${symbol} has been ${added ? 'added to' : 'removed from'} your tracked portfolio watchlist.`,
+      'info'
+    );
+  };
+
   // Auth Handlers
   const handleOpenAuth = (mode: 'login' | 'register' = 'login') => {
     setAuthModalMode(mode);
@@ -149,7 +233,6 @@ export default function App() {
       otp,
       'Click to Auto-fill',
       () => {
-        // Trigger auto fill
         const btn = document.querySelector('button[title="Click to auto-fill generated OTP"]') as HTMLButtonElement;
         if (btn) btn.click();
       }
@@ -177,7 +260,10 @@ export default function App() {
 
   // Route Parser
   const renderCurrentPage = () => {
-    if (currentRoute === '/') {
+    const route = currentRoute.toLowerCase();
+
+    // 1. MAIN
+    if (route === '/' || route === '/dashboard') {
       return (
         <HomePage
           coins={coins}
@@ -187,7 +273,7 @@ export default function App() {
       );
     }
 
-    if (currentRoute === '/markets') {
+    if (route === '/markets') {
       return (
         <MarketsPage
           coins={coins}
@@ -199,6 +285,18 @@ export default function App() {
       );
     }
 
+    if (route === '/watchlist') {
+      return (
+        <WatchlistPage
+          coins={coins}
+          watchlist={watchlist}
+          onToggleWatchlist={handleToggleWatchlist}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+
+    // 2. ANALYSIS
     if (currentRoute.startsWith('/coin/')) {
       const symbol = currentRoute.replace('/coin/', '').toUpperCase();
       const coin = coins.find((c) => c.symbol.toUpperCase() === symbol);
@@ -215,66 +313,90 @@ export default function App() {
       );
     }
 
-    if (currentRoute === '/predictions') {
-      return (
-        <PredictionsPage
-          coins={coins}
-          onNavigate={navigateTo}
-          onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
-        />
-      );
+    if (route === '/sentiment') {
+      return <SentimentPage coins={coins} onNavigate={navigateTo} />;
     }
 
-    if (currentRoute === '/models') {
-      return (
-        <ModelsLabPage
-          onNavigate={navigateTo}
-          onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
-        />
-      );
+    if (route === '/ai-intelligence' || route === '/ai') {
+      return <AiIntelligencePage coins={coins} onNavigate={navigateTo} />;
     }
 
-    if (currentRoute === '/regimes') {
-      return <RegimesPage coins={coins} onNavigate={navigateTo} />;
+    if (route === '/forecast') {
+      return <ForecastPage coins={coins} onNavigate={navigateTo} />;
     }
 
-    if (currentRoute === '/portfolio') {
+    if (route === '/risk-analysis' || route === '/risk') {
+      return <RiskAnalysisPage coins={coins} onNavigate={navigateTo} />;
+    }
+
+    // 3. MY FINANCE
+    if (route === '/portfolio') {
       return (
         <PortfolioPage
           coins={coins}
-          watchlist={watchlist}
-          onWatchlistChange={setWatchlist}
           onNavigate={navigateTo}
           onShowToast={(title, msg, type) => addToast(title, msg, type)}
-          initialTab="holdings"
         />
       );
     }
 
-    if (currentRoute === '/watchlist') {
+    if (route === '/transactions') {
       return (
-        <PortfolioPage
+        <TransactionsPage
           coins={coins}
-          watchlist={watchlist}
-          onWatchlistChange={setWatchlist}
           onNavigate={navigateTo}
           onShowToast={(title, msg, type) => addToast(title, msg, type)}
-          initialTab="watchlist"
         />
       );
     }
 
-    if (currentRoute === '/login') {
+    if (route === '/alerts') {
       return (
-        <LoginPage
-          onLoginSuccess={handleLoginSuccess}
+        <AlertsPage
+          coins={coins}
           onNavigate={navigateTo}
-          onNotifyOtp={handleNotifyOtp}
+          onShowToast={(title, msg, type) => addToast(title, msg, type)}
         />
       );
     }
 
-    if (currentRoute === '/settings') {
+    // 4. DISCOVER
+    if (route === '/news') {
+      return <NewsPage onNavigate={navigateTo} />;
+    }
+
+    if (route === '/learn') {
+      return <LearnPage onNavigate={navigateTo} />;
+    }
+
+    if (route === '/heatmap') {
+      return <HeatmapPage coins={coins} onNavigate={navigateTo} />;
+    }
+
+    // 5. TOOLS
+    if (route === '/tools/profit-calculator' || route === '/profit-calculator') {
+      return <ProfitCalculatorPage coins={coins} />;
+    }
+
+    if (route === '/tools/dca-calculator' || route === '/dca-calculator') {
+      return <DcaCalculatorPage coins={coins} />;
+    }
+
+    if (route === '/tools/compare' || route === '/compare') {
+      return <ComparePage coins={coins} onNavigate={navigateTo} />;
+    }
+
+    if (route === '/tools/simulator' || route === '/simulator') {
+      return (
+        <SimulatorPage
+          coins={coins}
+          onShowToast={(title, msg, type) => addToast(title, msg, type)}
+        />
+      );
+    }
+
+    // 6. PREFERENCES & AUTH
+    if (route === '/settings') {
       return (
         <SettingsPage
           settings={settings}
@@ -286,7 +408,52 @@ export default function App() {
       );
     }
 
-    // Default fallback
+    if (route === '/profile') {
+      return (
+        <ProfilePage
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenAuth={handleOpenAuth}
+          onShowToast={(title, msg, type) => addToast(title, msg, type)}
+        />
+      );
+    }
+
+    if (route === '/login') {
+      return (
+        <LoginPage
+          onLoginSuccess={handleLoginSuccess}
+          onNavigate={navigateTo}
+          onNotifyOtp={handleNotifyOtp}
+        />
+      );
+    }
+
+    // Legacy Power Features (Preserved in code for advanced users)
+    if (route === '/predictions') {
+      return (
+        <PredictionsPage
+          coins={coins}
+          onNavigate={navigateTo}
+          onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
+        />
+      );
+    }
+
+    if (route === '/models') {
+      return (
+        <ModelsLabPage
+          onNavigate={navigateTo}
+          onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
+        />
+      );
+    }
+
+    if (route === '/regimes') {
+      return <RegimesPage coins={coins} onNavigate={navigateTo} />;
+    }
+
+    // Fallback
     return (
       <HomePage
         coins={coins}
@@ -299,104 +466,110 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500/20 selection:text-emerald-300">
-      {/* Top Academic Disclaimer Banner */}
-      {settings.showDisclaimerBanner && (
-        <DisclaimerBanner dismissible={true} />
-      )}
+        {/* Top Academic Disclaimer Banner */}
+        {settings.showDisclaimerBanner && (
+          <DisclaimerBanner dismissible={true} />
+        )}
 
-      {/* Main App Navigation Header */}
-      <Header
-        currentRoute={currentRoute}
-        onNavigate={navigateTo}
-        coins={coins}
-        providerStatus={providerStatus}
-        theme={settings.theme}
-        onToggleTheme={handleToggleTheme}
-        onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
-        currentUser={currentUser}
-        onOpenAuth={handleOpenAuth}
-        onLogout={handleLogout}
-      />
+        {/* Responsive Drawer Sidebar Navigation */}
+        <Sidebar
+          isOpen={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          currentRoute={currentRoute}
+          onNavigate={navigateTo}
+          watchlistCount={watchlist.length}
+          alertsCount={activeAlertsCount}
+          portfolioCount={getPortfolioHoldings().length}
+        />
 
-      {/* Main Content Viewport */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-        {isInitialLoading && coins.length === 0 ? (
-          <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-            <div className="w-10 h-10 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-            <div className="text-sm font-mono text-slate-400">
-              Connecting to Binance Spot & FCS Feed...
+        {/* Global Instant Search Modal (Cmd+K / Ctrl+K) */}
+        <QuickSearchModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          coins={coins}
+          onNavigate={navigateTo}
+        />
+
+        {/* Main App Navigation Header */}
+        <Header
+          currentRoute={currentRoute}
+          onNavigate={navigateTo}
+          coins={coins}
+          providerStatus={providerStatus}
+          theme={settings.theme}
+          onToggleTheme={handleToggleTheme}
+          onOpenDisclaimer={() => setIsDisclaimerModalOpen(false)}
+          currentUser={currentUser}
+          onOpenAuth={handleOpenAuth}
+          onLogout={handleLogout}
+          onOpenSearch={() => setIsSearchModalOpen(true)}
+          onOpenSidebar={() => setIsSidebarOpen(true)}
+          currency={settings.currency}
+          onSelectCurrency={handleSelectCurrency}
+          alertsCount={activeAlertsCount}
+        />
+
+        {/* Main Content Viewport */}
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+          {isInitialLoading && coins.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+              <div className="w-10 h-10 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+              <div className="text-sm font-mono text-slate-400">
+                Connecting to Spot Markets & AI Intelligence Feed...
+              </div>
+            </div>
+          ) : (
+            renderCurrentPage()
+          )}
+        </main>
+
+        {/* Footer */}
+        <Footer
+          onNavigate={navigateTo}
+          onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
+        />
+
+        {/* Global Academic Disclaimer Modal */}
+        <Modal
+          isOpen={isDisclaimerModalOpen}
+          onClose={() => setIsDisclaimerModalOpen(false)}
+          title="CryptoAnalyzer — Platform Methodology & Notice"
+          subtitle="Empirical Machine Learning in Cryptocurrency Financial Time Series"
+          maxWidth="2xl"
+        >
+          <div className="space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
+            <div className="p-3.5 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200 text-xs">
+              <strong>Non-Financial Advice Disclaimer:</strong> CryptoAnalyzer is an educational and cryptocurrency intelligence research platform designed for market exploration, trend evaluation, and empirical comparison of predictive models. Under no circumstances should any prediction, regime label, or AI insight be construed as investment, financial, or trading advice.
+            </div>
+
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-1">
+                AI Intelligence & Price Forecasting
+              </h4>
+              <p className="text-xs text-slate-400">
+                The platform integrates real-time Gemini 3.8 Flash intelligence with quantitative indicators (RSI, MACD, Bollinger Bands, ATR) and mathematical regression channels to provide clear, actionable summaries for both beginner and experienced investors.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="text-white font-semibold text-sm mb-1">
+                Real-Time Spot Feeds & Transparency
+              </h4>
+              <p className="text-xs text-slate-400">
+                All prices, volumes, order book dynamics, and historical candles are synced from institutional spot APIs (Binance Spot REST & WebSocket endpoints, CoinGecko, and Alternative.me Fear & Greed).
+              </p>
             </div>
           </div>
-        ) : (
-          renderCurrentPage()
-        )}
-      </main>
+        </Modal>
 
-      {/* Footer */}
-      <Footer
-        onNavigate={navigateTo}
-        onOpenDisclaimer={() => setIsDisclaimerModalOpen(true)}
-      />
-
-      {/* Global Academic Disclaimer Modal */}
-      <Modal
-        isOpen={isDisclaimerModalOpen}
-        onClose={() => setIsDisclaimerModalOpen(false)}
-        title="CryptoAnalyzer — Academic Research Notice"
-        subtitle="Empirical Machine Learning in Cryptocurrency Financial Time Series"
-        maxWidth="2xl"
-      >
-        <div className="space-y-4 text-xs sm:text-sm text-slate-300 leading-relaxed">
-          <div className="p-3.5 rounded-lg bg-amber-950/40 border border-amber-800/50 text-amber-200 text-xs">
-            <strong>Non-Financial Advice Disclaimer:</strong> CryptoAnalyzer is an academic research platform designed solely for scientific study, algorithmic evaluation, and empirical comparison of machine learning models. Under no circumstances should any prediction, regime label, or metric be construed as investment, financial, or trading advice.
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold text-sm mb-1">
-              7 Machine Learning Architectures
-            </h4>
-            <p className="text-xs text-slate-400">
-              The project evaluates 4 baselines (Naive Persistence Random Walk, Ridge/ElasticNet Linear, Random Forest 100 Trees, XGBoost Gradient Boosting) against 3 Deep Learning networks (2-Layer LSTM with forget gates, Gated Recurrent Unit [GRU], and 1D Temporal Dilated Convolutional Networks).
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold text-sm mb-1">
-              4 Hierarchical Feature Sets
-            </h4>
-            <p className="text-xs text-slate-400">
-              Ablation testing spans Price Only (OHLC, 4 features), Price + Volume (OHLCV, 5 features), Technical Indicators (19 features), and the Full Feature Set (24 features, including continuous Gaussian HMM state probabilities, volatility ratios, and return momentum).
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold text-sm mb-1">
-              Hidden Markov Model (HMM) Regimes
-            </h4>
-            <p className="text-xs text-slate-400">
-              A 4-state continuous HMM partitions the state space into Bull Trend, Bear Trend, Sideways Consolidation, and High Volatility Shock to mitigate non-stationarity in financial series.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-white font-semibold text-sm mb-1">
-              Hypothesis Testing (Wilcoxon + Holm)
-            </h4>
-            <p className="text-xs text-slate-400">
-              All out-of-sample directional forecasts are rigorously tested against the naive random-walk baseline using Wilcoxon signed-rank tests with Holm-Bonferroni step-down adjustments to ensure statistical significance at α = 0.05.
-            </p>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Auth Modal (Email + OTP Verification) */}
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        initialMode={authModalMode}
-        onLoginSuccess={handleLoginSuccess}
-        onNotifyOtp={handleNotifyOtp}
-      />
+        {/* Auth Modal (Email + OTP Verification) */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialMode={authModalMode}
+          onLoginSuccess={handleLoginSuccess}
+          onNotifyOtp={handleNotifyOtp}
+        />
 
         {/* Global Real-time Toast Notifications */}
         <ToastContainer toasts={toasts} onDismiss={removeToast} />

@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
-      // Suppress unhandled errors injected by third-party browser extensions and userscripts
+      // Suppress unhandled errors injected by third-party browser extensions and Vite HMR websocket drops
       window.addEventListener('error', function(e) {
         var src = (e.filename || '') + (e.message || '') + (e.error && e.error.stack ? e.error.stack : '');
         if (
@@ -22,7 +22,9 @@
           src.indexOf('safari-extension:') !== -1 ||
           src.indexOf('.user.js') !== -1 ||
           src.indexOf('userscripts') !== -1 ||
-          src.indexOf('__f__') !== -1
+          src.indexOf('__f__') !== -1 ||
+          src.indexOf('createWebSocketModuleRunnerTransport') !== -1 ||
+          src.indexOf('WebSocket closed without opened') !== -1
         ) {
           e.stopImmediatePropagation();
           e.preventDefault();
@@ -36,7 +38,9 @@
           reason.indexOf('chrome-extension:') !== -1 ||
           reason.indexOf('.user.js') !== -1 ||
           reason.indexOf('userscripts') !== -1 ||
-          reason.indexOf('__f__') !== -1
+          reason.indexOf('__f__') !== -1 ||
+          reason.indexOf('createWebSocketModuleRunnerTransport') !== -1 ||
+          reason.indexOf('WebSocket closed without opened') !== -1
         ) {
           e.stopImmediatePropagation();
           e.preventDefault();

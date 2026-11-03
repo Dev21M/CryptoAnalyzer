@@ -148,6 +148,9 @@ export const PredictionsPage: React.FC<PredictionsPageProps> = ({
             '1h': 1.0,
             '4h': 1.95,
             '1d': 3.4,
+            '24h': 3.4,
+            '7d': 8.5,
+            '30d': 18.0,
           };
           const multiplier = horizonMultipliers[horizon] ?? 1.0;
           const scaledReturnPct = Number((coin.primaryForecast.expectedReturnPct * multiplier).toFixed(2));

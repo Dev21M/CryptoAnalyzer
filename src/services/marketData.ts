@@ -204,19 +204,34 @@ export async function fetchCandles(
 export async function fetchAllCoinsSummary(): Promise<CoinSummary[]> {
   const results: CoinSummary[] = [];
 
-  // Try fetching live 24hr tickers from Binance
+  // Try fetching live 24hr tickers from our server proxy first, then direct Binance
   let liveTickers: Record<string, any> = {};
   try {
-    const res = await fetch('https://api.binance.com/api/v3/ticker/24hr', { cache: 'no-store' });
-    if (res.ok) {
-      const list = await res.json();
-      list.forEach((t: any) => {
-        liveTickers[t.symbol] = t;
-      });
-      globalProviderStatus.activeProvider = 'Binance Spot API';
+    const proxyRes = await fetch('/api/market/tickers', { cache: 'no-store' });
+    if (proxyRes.ok) {
+      const list = await proxyRes.json();
+      if (Array.isArray(list)) {
+        list.forEach((t: any) => {
+          liveTickers[t.symbol] = t;
+        });
+        globalProviderStatus.activeProvider = 'Binance Spot Feed (Cached Proxy)';
+      }
+    } else {
+      throw new Error('Proxy offline');
     }
   } catch {
-    // fallback gracefully
+    try {
+      const res = await fetch('https://api.binance.com/api/v3/ticker/24hr', { cache: 'no-store' });
+      if (res.ok) {
+        const list = await res.json();
+        list.forEach((t: any) => {
+          liveTickers[t.symbol] = t;
+        });
+        globalProviderStatus.activeProvider = 'Binance Direct Feed';
+      }
+    } catch {
+      // fallback gracefully
+    }
   }
 
   for (const coin of TRACKED_COINS) {
@@ -224,10 +239,10 @@ export async function fetchAllCoinsSummary(): Promise<CoinSummary[]> {
     const ticker = liveTickers[tickerKey];
 
     let price = coin.basePrice;
-    let change24h = (Math.random() - 0.45) * 4.5;
-    let high24h = price * 1.03;
-    let low24h = price * 0.97;
-    let volume24h = price * coin.circulatingSupply * 0.04;
+    let change24h = 1.25;
+    let high24h = price * 1.025;
+    let low24h = price * 0.975;
+    let volume24h = price * coin.circulatingSupply * 0.035;
 
     if (ticker) {
       const parsedPrice = parseFloat(ticker.lastPrice);
@@ -243,8 +258,8 @@ export async function fetchAllCoinsSummary(): Promise<CoinSummary[]> {
       volume24h = parseFloat(ticker.quoteVolume) || volume24h;
     }
 
-    const change1h = Number((change24h * 0.15 + (Math.random() - 0.48) * 0.5).toFixed(2));
-    const change7d = Number((change24h * 2.1 + (Math.random() - 0.45) * 5).toFixed(2));
+    const change1h = Number((change24h * 0.12).toFixed(2));
+    const change7d = Number((change24h * 1.85).toFixed(2));
     const marketCap = price * coin.circulatingSupply;
 
     // Determine HMM regime

@@ -7,6 +7,7 @@ export interface PriceChangeProps {
   prefix?: string;
   suffix?: string;
   className?: string;
+  size?: 'sm' | 'md' | 'lg';
 }
 
 export const PriceChange: React.FC<PriceChangeProps> = ({
@@ -15,6 +16,7 @@ export const PriceChange: React.FC<PriceChangeProps> = ({
   prefix = '',
   suffix = '%',
   className = '',
+  size = 'md',
 }) => {
   const isPositive = value > 0;
   const isNegative = value < 0;
@@ -25,8 +27,10 @@ export const PriceChange: React.FC<PriceChangeProps> = ({
     ? 'text-rose-400'
     : 'text-slate-400';
 
+  const sizeClass = size === 'sm' ? 'text-xs' : size === 'lg' ? 'text-base font-semibold' : 'text-sm';
+
   return (
-    <span className={`inline-flex items-center font-mono font-medium ${colorClass} ${className}`}>
+    <span className={`inline-flex items-center font-mono font-medium ${sizeClass} ${colorClass} ${className}`}>
       {showIcon && (
         <span className="mr-0.5">
           {isPositive ? (

@@ -8,6 +8,7 @@ interface CardProps {
   action?: React.ReactNode;
   padding?: 'none' | 'sm' | 'md' | 'lg';
   floating?: boolean;
+  onClick?: () => void;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -18,6 +19,7 @@ export const Card: React.FC<CardProps> = ({
   action,
   padding = 'md',
   floating = false,
+  onClick,
 }) => {
   const paddingStyles = {
     none: 'p-0',
@@ -28,9 +30,10 @@ export const Card: React.FC<CardProps> = ({
 
   return (
     <div
+      onClick={onClick}
       className={`bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden shadow-sm backdrop-blur-sm ${
         floating ? 'card-float hover:border-slate-700' : ''
-      } ${className}`}
+      } ${onClick ? 'cursor-pointer hover:border-slate-700 transition-colors' : ''} ${className}`}
     >
       {(title || action) && (
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/80 bg-slate-950/40">

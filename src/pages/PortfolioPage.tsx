@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import {
   ArrowDownRight,
   ArrowUpRight,
-  Bookmark,
-  BookmarkCheck,
   Briefcase,
   Download,
+  History,
+  PieChart,
   Plus,
   Trash2,
   TrendingUp,
@@ -13,67 +13,80 @@ import {
 } from 'lucide-react';
 import { Button } from '../components/common/Button';
 import { Card } from '../components/common/Card';
-import { ExportModal } from '../components/common/ExportModal';
-import { MetricCard } from '../components/common/MetricCard';
 import { Modal } from '../components/common/Modal';
 import { RegimeBadge } from '../components/common/RegimeBadge';
 import {
-  addPortfolioHolding,
-  getPortfolio,
-  removePortfolioHolding,
-  toggleWatchlistSymbol,
-} from '../services/storage';
+  addTransaction,
+  getPortfolioHoldings,
+  getTransactions,
+} from '../services/portfolioService';
+import { exportToCSV } from '../services/storage';
 import { CoinSummary, PortfolioHolding } from '../types/crypto';
 
 interface PortfolioPageProps {
   coins: CoinSummary[];
-  watchlist: string[];
-  onWatchlistChange: (updated: string[]) => void;
   onNavigate: (route: string) => void;
   onShowToast?: (title: string, message: string, type?: 'success' | 'info' | 'error') => void;
-  initialTab?: 'holdings' | 'watchlist';
 }
 
 export const PortfolioPage: React.FC<PortfolioPageProps> = ({
   coins,
-  watchlist,
-  onWatchlistChange,
   onNavigate,
   onShowToast,
-  initialTab = 'holdings',
 }) => {
-  const [holdings, setHoldings] = useState<PortfolioHolding[]>(getPortfolio());
+  const [holdings, setHoldings] = useState<PortfolioHolding[]>(getPortfolioHoldings());
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isExportOpen, setIsExportOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'holdings' | 'watchlist'>(initialTab);
 
-  // Form State for Adding Holding
+  // Form State for Adding Trade
   const [formSymbol, setFormSymbol] = useState('BTC');
+  const [formType, setFormType] = useState<'BUY' | 'SELL'>('BUY');
   const [formAmount, setFormAmount] = useState('');
-  const [formBuyPrice, setFormBuyPrice] = useState('');
+  const [formPrice, setFormPrice] = useState('');
   const [formNotes, setFormNotes] = useState('');
 
-  // Watchlisted Coin Objects
-  const watchlistedCoins = coins.filter((c) => watchlist.includes(c.symbol));
-
-  // Safe formatting helpers
-  const formatNum = (val: number | undefined, decimals = 2): string => {
-    const n = typeof val === 'number' && !isNaN(val) ? val : 0;
-    return n.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const handleOpenAddModal = (sym: string = 'BTC') => {
+    setFormSymbol(sym);
+    const coin = coins.find((c) => c.symbol === sym);
+    setFormPrice(coin ? String(coin.price) : '77000');
+    setFormAmount('1');
+    setFormNotes('');
+    setIsAddModalOpen(true);
   };
 
-  const formatPriceVal = (val: number | undefined): string => {
-    const n = typeof val === 'number' && !isNaN(val) ? val : 0;
-    if (n < 1 && n > 0) return n.toFixed(4);
-    return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const handleSaveTrade = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedAmount = parseFloat(formAmount);
+    const parsedPrice = parseFloat(formPrice);
+
+    if (isNaN(parsedAmount) || parsedAmount <= 0 || isNaN(parsedPrice) || parsedPrice <= 0) {
+      onShowToast?.('Invalid Inputs', 'Please provide a valid trade quantity and price.', 'error');
+      return;
+    }
+
+    const coin = coins.find((c) => c.symbol === formSymbol.toUpperCase());
+    addTransaction({
+      symbol: formSymbol.toUpperCase(),
+      coinName: coin ? coin.name : formSymbol.toUpperCase(),
+      type: formType,
+      amount: parsedAmount,
+      pricePerCoin: parsedPrice,
+      fee: 0,
+      date: new Date().toISOString().split('T')[0],
+      notes: formNotes,
+    });
+
+    const updatedHoldings = getPortfolioHoldings();
+    setHoldings(updatedHoldings);
+    setIsAddModalOpen(false);
+    onShowToast?.('Holding Added', `Recorded ${formType} transaction for ${parsedAmount} ${formSymbol}.`, 'success');
   };
 
-  // Portfolio Calculations with complete defensive guards
+  // Portfolio Calculations
   const calculatedHoldings = holdings.map((h) => {
     const coin = coins.find((c) => c && c.symbol && c.symbol.toUpperCase() === (h.symbol || '').toUpperCase());
-    const buyPrice = typeof h.buyPrice === 'number' && !isNaN(h.buyPrice) ? h.buyPrice : 0;
-    const amount = typeof h.amount === 'number' && !isNaN(h.amount) ? h.amount : 0;
-    const currentPrice = typeof coin?.price === 'number' && !isNaN(coin.price) ? coin.price : buyPrice;
+    const buyPrice = h.buyPrice || 0;
+    const amount = h.amount || 0;
+    const currentPrice = coin?.price ?? buyPrice;
     const marketValue = amount * currentPrice;
     const costBasis = amount * buyPrice;
     const pnlUsd = marketValue - costBasis;
@@ -98,421 +111,408 @@ export const PortfolioPage: React.FC<PortfolioPageProps> = ({
   const totalPnlUsd = totalValue - totalCost;
   const totalPnlPct = totalCost > 0 ? (totalPnlUsd / totalCost) * 100 : 0;
 
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(formAmount);
-    const price = parseFloat(formBuyPrice);
-    if (isNaN(amt) || amt <= 0 || isNaN(price) || price <= 0) return;
+  // 24h PnL estimate based on current holdings and their 24h change
+  const dayPnlUsd = calculatedHoldings.reduce((acc, h) => {
+    const fraction = h.change24h / 100;
+    return acc + (h.marketValue * fraction) / (1 + fraction);
+  }, 0);
+  const dayPnlPct = totalValue > 0 ? (dayPnlUsd / totalValue) * 100 : 0;
 
-    const coin = coins.find((c) => c.symbol === formSymbol);
-    const updated = addPortfolioHolding({
-      symbol: formSymbol,
-      name: coin?.name ?? formSymbol,
-      amount: amt,
-      buyPrice: price,
-      buyDate: new Date().toISOString().split('T')[0],
-      notes: formNotes,
-    });
-
-    setHoldings(updated);
-    setIsAddModalOpen(false);
-    setFormAmount('');
-    setFormBuyPrice('');
-    setFormNotes('');
-    onShowToast?.(
-      'Position Saved',
-      `Recorded ${amt} ${formSymbol} at $${price.toLocaleString()} in your research portfolio.`,
-      'success'
-    );
-  };
-
-  const handleDeleteHolding = (id: string) => {
-    const target = holdings.find((h) => h.id === id);
-    const updated = removePortfolioHolding(id);
-    setHoldings(updated);
-    onShowToast?.(
-      'Holding Removed',
-      `Removed ${target?.symbol || 'position'} from portfolio tracking.`,
-      'info'
-    );
-  };
-
-  const handleRemoveWatchlist = (symbol: string) => {
-    const updated = toggleWatchlistSymbol(symbol);
-    onWatchlistChange(updated);
-    onShowToast?.('Watchlist Updated', `Removed ${symbol} from priority research alerts.`, 'info');
+  const handleExportCSV = () => {
+    const txs = getTransactions();
+    exportToCSV(`cryptoanalyzer_portfolio_${new Date().toISOString().split('T')[0]}`, txs);
+    onShowToast?.('Export Complete', 'Exported transactions to CSV file.', 'success');
   };
 
   return (
     <div className="space-y-6">
-      {/* Page Title & Actions */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Portfolio & Watchlist Tracker</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-white tracking-tight">Personal Portfolio Tracker</h1>
+            <span className="text-xs font-mono bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
+              Multi-Transaction Ledger
+            </span>
+          </div>
           <p className="text-xs text-slate-400 mt-1">
-            Track multi-coin positions, unrealized P/L, and monitor priority watchlisted research assets
+            Real-time asset valuation, profit/loss attribution, and cost-basis analysis
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <Button
-            variant="primary"
+            variant="outline"
             size="sm"
-            icon={<Plus className="w-4 h-4" />}
-            onClick={() => {
-              const btc = coins.find((c) => c.symbol === 'BTC');
-              setFormSymbol('BTC');
-              setFormBuyPrice(btc ? btc.price.toString() : '65000');
-              setIsAddModalOpen(true);
-            }}
+            onClick={handleExportCSV}
+            icon={<Download className="w-3.5 h-3.5" />}
           >
-            Add Holding
+            Export
           </Button>
 
           <Button
             variant="secondary"
             size="sm"
-            icon={<Download className="w-4 h-4" />}
-            onClick={() => setIsExportOpen(true)}
+            onClick={() => onNavigate('/transactions')}
+            icon={<History className="w-3.5 h-3.5" />}
           >
-            Export Portfolio
+            Ledger
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleOpenAddModal('BTC')}
+            icon={<Plus className="w-4 h-4" />}
+          >
+            Record Trade
           </Button>
         </div>
       </div>
 
-      {/* Portfolio Overview KPIs */}
+      {/* Portfolio Overview Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          label="Total Portfolio Valuation"
-          value={`$${formatNum(totalValue)}`}
-          subtext={`Cost basis: $${formatNum(totalCost)}`}
-          icon={<Wallet className="w-4 h-4 text-emerald-400" />}
-          variant="highlight"
-        />
-        <MetricCard
-          label="Total Unrealized P/L ($)"
-          value={`${totalPnlUsd >= 0 ? '+' : ''}$${formatNum(totalPnlUsd)}`}
-          change={totalPnlPct}
-          changeLabel="Total P/L"
-        />
-        <MetricCard
-          label="Active Positions"
-          value={holdings.length}
-          subtext="Stored safely in localStorage"
-          icon={<Briefcase className="w-4 h-4 text-slate-400" />}
-        />
-        <MetricCard
-          label="Saved Watchlist"
-          value={watchlist.length}
-          subtext="High-conviction research alerts"
-          icon={<BookmarkCheck className="w-4 h-4 text-amber-400" />}
-        />
+        {/* Total Value */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
+            <span>Current Portfolio Value</span>
+            <Wallet className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="my-2">
+            <div className="text-3xl font-extrabold font-mono text-white">
+              ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+              Cost Basis: ${totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {calculatedHoldings.length} Active Asset Positions
+          </span>
+        </Card>
+
+        {/* All-Time P&L */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
+            <span>Total Profit / Loss</span>
+            {totalPnlUsd >= 0 ? (
+              <ArrowUpRight className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <ArrowDownRight className="w-4 h-4 text-rose-400" />
+            )}
+          </div>
+          <div className="my-2">
+            <div
+              className={`text-3xl font-extrabold font-mono ${
+                totalPnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {totalPnlUsd >= 0 ? '+' : ''}${totalPnlUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div
+              className={`text-xs font-mono font-bold mt-0.5 ${
+                totalPnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}% All-Time ROI
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">Unrealized position return</span>
+        </Card>
+
+        {/* 24-Hour P&L */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
+            <span>24-Hour Return</span>
+            {dayPnlUsd >= 0 ? (
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <ArrowDownRight className="w-4 h-4 text-rose-400" />
+            )}
+          </div>
+          <div className="my-2">
+            <div
+              className={`text-3xl font-extrabold font-mono ${
+                dayPnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {dayPnlUsd >= 0 ? '+' : ''}${dayPnlUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div
+              className={`text-xs font-mono font-bold mt-0.5 ${
+                dayPnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {dayPnlPct >= 0 ? '+' : ''}{dayPnlPct.toFixed(2)}% in last 24h
+            </div>
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">Intraday asset change</span>
+        </Card>
+
+        {/* Top Asset Allocation */}
+        <Card className="p-5 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-slate-400 text-xs">
+            <span>Primary Holding Share</span>
+            <PieChart className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="my-2">
+            {calculatedHoldings.length > 0 ? (
+              <>
+                <div className="text-2xl font-bold font-mono text-white">
+                  {calculatedHoldings[0].symbol} (
+                  {((calculatedHoldings[0].marketValue / (totalValue || 1)) * 100).toFixed(1)}%)
+                </div>
+                <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  ${calculatedHoldings[0].marketValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+              </>
+            ) : (
+              <div className="text-sm text-slate-500 font-mono">No holdings recorded</div>
+            )}
+          </div>
+          <span className="text-[10px] text-slate-400 font-mono">Dominant position weight</span>
+        </Card>
       </div>
 
-      {/* Tabs Switcher */}
-      <div className="flex items-center gap-1 border-b border-slate-800 bg-slate-900/60 p-1 rounded-lg text-xs font-medium">
-        <button
-          onClick={() => setActiveTab('holdings')}
-          className={`px-4 py-2 rounded-md transition-colors ${
-            activeTab === 'holdings'
-              ? 'bg-slate-800 text-white font-semibold'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Portfolio Holdings ({holdings.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('watchlist')}
-          className={`px-4 py-2 rounded-md transition-colors ${
-            activeTab === 'watchlist'
-              ? 'bg-slate-800 text-white font-semibold'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          Watchlist Coins ({watchlist.length})
-        </button>
-      </div>
+      {/* Asset Allocation Distribution Bar */}
+      {calculatedHoldings.length > 0 && (
+        <Card className="p-4 space-y-2">
+          <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+            <span>Portfolio Allocation Distribution</span>
+            <span>{calculatedHoldings.length} Coins</span>
+          </div>
 
-      {/* Tab Content 1: Holdings */}
-      {activeTab === 'holdings' && (
-        <Card padding="none">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase text-[10px]">
+          <div className="h-4 w-full bg-slate-800 rounded-lg overflow-hidden flex font-mono text-[9px] font-bold text-white">
+            {calculatedHoldings.map((h, idx) => {
+              const share = ((h.marketValue / (totalValue || 1)) * 100).toFixed(1);
+              const colors = ['bg-emerald-500', 'bg-cyan-500', 'bg-indigo-500', 'bg-amber-500', 'bg-purple-500'];
+              const bg = colors[idx % colors.length];
+
+              return (
+                <div
+                  key={h.symbol}
+                  style={{ width: `${share}%` }}
+                  className={`${bg} flex items-center justify-center transition-all`}
+                  title={`${h.symbol}: ${share}% ($${h.marketValue.toLocaleString()})`}
+                >
+                  {Number(share) > 8 && `${h.symbol} ${share}%`}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Holdings Table */}
+      <Card className="p-0 overflow-hidden">
+        <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between">
+          <div className="text-sm font-bold text-white">Current Asset Holdings</div>
+          <span className="text-xs font-mono text-slate-400">
+            Weighted Average Cost Basis
+          </span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-mono text-[11px]">
+              <tr>
+                <th className="py-3 px-4">Asset</th>
+                <th className="py-3 px-4 text-right">Holding Units</th>
+                <th className="py-3 px-4 text-right">Avg Buying Price</th>
+                <th className="py-3 px-4 text-right">Current Spot</th>
+                <th className="py-3 px-4 text-right">Market Value</th>
+                <th className="py-3 px-4 text-right">Unrealized P&L</th>
+                <th className="py-3 px-4 text-right">Allocation</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-sans">
+              {calculatedHoldings.length === 0 ? (
                 <tr>
-                  <th className="py-3 px-4 font-sans">Asset</th>
-                  <th className="py-3 px-4 text-right">Holding Size</th>
-                  <th className="py-3 px-4 text-right">Avg Buy Price</th>
-                  <th className="py-3 px-4 text-right">Current Spot</th>
-                  <th className="py-3 px-4 text-right">Market Value</th>
-                  <th className="py-3 px-4 text-right">Unrealized P/L</th>
-                  <th className="py-3 px-4 text-center">Regime</th>
-                  <th className="py-3 px-4 text-right font-sans">Action</th>
+                  <td colSpan={8} className="py-12 text-center text-slate-500">
+                    No holdings in portfolio. Record your first trade to begin tracking.
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {calculatedHoldings.length > 0 ? (
-                  calculatedHoldings.map((h) => (
-                    <tr
-                      key={h.id}
-                      onClick={() => onNavigate(`/coin/${h.symbol}`)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors group"
-                    >
-                      <td className="py-3.5 px-4 font-sans">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-white group-hover:text-emerald-400">
-                            {h.symbol}
-                          </span>
-                          <span className="text-slate-400 text-[11px]">{h.name}</span>
-                        </div>
-                        {h.notes && <div className="text-[10px] text-slate-500 italic mt-0.5">{h.notes}</div>}
-                      </td>
+              ) : (
+                calculatedHoldings.map((h) => {
+                  const allocPct = ((h.marketValue / (totalValue || 1)) * 100).toFixed(1);
 
-                      <td className="py-3.5 px-4 text-right text-slate-200">
-                        {h.amount} {h.symbol}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right text-slate-300">
-                        ${formatPriceVal(h.buyPrice)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-bold text-white">
-                        ${formatPriceVal(h.currentPrice)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-100">
-                        ${formatNum(h.marketValue)}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right">
+                  return (
+                    <tr key={h.symbol} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="py-3 px-4">
                         <div
-                          className={`font-bold flex items-center justify-end gap-0.5 ${
+                          onClick={() => onNavigate(`/coin/${h.symbol}`)}
+                          className="flex items-center gap-2.5 cursor-pointer group"
+                        >
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 font-mono font-bold text-xs flex items-center justify-center">
+                            {h.symbol.slice(0, 3)}
+                          </div>
+                          <div>
+                            <span className="font-bold text-white group-hover:text-emerald-400 transition-colors">
+                              {h.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-500 ml-1.5">{h.symbol}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4 font-mono font-semibold text-slate-200 text-right">
+                        {h.amount.toLocaleString()} {h.symbol}
+                      </td>
+
+                      <td className="py-3 px-4 font-mono text-slate-300 text-right">
+                        ${h.buyPrice < 1 ? h.buyPrice.toFixed(4) : h.buyPrice.toLocaleString()}
+                      </td>
+
+                      <td className="py-3 px-4 font-mono font-bold text-white text-right">
+                        ${h.currentPrice < 1 ? h.currentPrice.toFixed(4) : h.currentPrice.toLocaleString()}
+                      </td>
+
+                      <td className="py-3 px-4 font-mono font-bold text-white text-right">
+                        ${h.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+
+                      <td className="py-3 px-4 font-mono text-right">
+                        <div
+                          className={`font-bold ${
                             h.pnlUsd >= 0 ? 'text-emerald-400' : 'text-rose-400'
                           }`}
                         >
-                          {h.pnlUsd >= 0 ? '+' : ''}${formatNum(h.pnlUsd)}
+                          {h.pnlUsd >= 0 ? '+' : ''}${h.pnlUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                         <div
                           className={`text-[10px] ${
                             h.pnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
                           }`}
                         >
-                          ({h.pnlPct >= 0 ? '+' : ''}{formatNum(h.pnlPct)}%)
+                          ({h.pnlPct >= 0 ? '+' : ''}{h.pnlPct.toFixed(2)}%)
                         </div>
                       </td>
 
-                      <td className="py-3.5 px-4 text-center">
-                        <RegimeBadge regime={h.currentRegime} size="sm" />
+                      <td className="py-3 px-4 font-mono text-slate-300 text-right">
+                        {allocPct}%
                       </td>
 
-                      <td className="py-3.5 px-4 text-right font-sans">
+                      <td className="py-3 px-4 text-right">
                         <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteHolding(h.id);
-                          }}
-                          className="p-1 text-slate-500 hover:text-rose-400 transition-colors"
-                          title="Delete holding"
+                          onClick={() => handleOpenAddModal(h.symbol)}
+                          className="text-xs font-medium text-emerald-400 hover:text-emerald-300 cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          + Add Trade
                         </button>
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-slate-400 font-sans">
-                      No holdings in portfolio yet. Click "Add Holding" to track research positions.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-      {/* Tab Content 2: Watchlist */}
-      {activeTab === 'watchlist' && (
-        <Card padding="none">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
-              <thead className="bg-slate-950/80 text-slate-400 border-b border-slate-800 uppercase text-[10px]">
-                <tr>
-                  <th className="py-3 px-4 font-sans">Asset</th>
-                  <th className="py-3 px-4 text-right">Spot Price</th>
-                  <th className="py-3 px-4 text-right">24h Change</th>
-                  <th className="py-3 px-4 text-right">24h Volume</th>
-                  <th className="py-3 px-4 text-center">Regime</th>
-                  <th className="py-3 px-4 text-right">AI 1h Horizon Forecast</th>
-                  <th className="py-3 px-4 text-right font-sans">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60">
-                {watchlistedCoins.length > 0 ? (
-                  watchlistedCoins.map((coin) => (
-                    <tr
-                      key={coin.symbol}
-                      onClick={() => onNavigate(`/coin/${coin.symbol}`)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors group"
-                    >
-                      <td className="py-3.5 px-4 font-sans">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-white group-hover:text-emerald-400">
-                            {coin.symbol}
-                          </span>
-                          <span className="text-slate-400 text-[11px]">{coin.name}</span>
-                        </div>
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-bold text-white">
-                        ${formatPriceVal(coin.price)}
-                      </td>
-
-                      <td
-                        className={`py-3.5 px-4 text-right font-semibold ${
-                          (coin.change24h ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {(coin.change24h ?? 0) >= 0 ? '+' : ''}
-                        {formatNum(coin.change24h)}%
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right text-slate-300">
-                        ${formatNum((coin.volume24h ?? 0) / 1e6, 1)}M
-                      </td>
-
-                      <td className="py-3.5 px-4 text-center">
-                        <RegimeBadge regime={coin.currentRegime ?? 'Sideways'} size="sm" />
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-semibold text-emerald-400">
-                        {coin.primaryForecast?.direction ?? 'Neutral'} (
-                        {(coin.primaryForecast?.expectedReturnPct ?? 0) >= 0 ? '+' : ''}
-                        {formatNum(coin.primaryForecast?.expectedReturnPct)}%)
-                      </td>
-
-                      <td className="py-3.5 px-4 text-right font-sans">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveWatchlist(coin.symbol);
-                          }}
-                          className="text-xs text-rose-400 hover:text-rose-300 underline"
-                        >
-                          Remove
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400 font-sans">
-                      Your watchlist is empty. Add coins from the Markets page or Coin Analysis page.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      )}
-
-      {/* Add Holding Modal */}
+      {/* Record Trade Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title="Add Holding to Research Portfolio"
-        subtitle="Simulate position returns and compare with ML forecasts"
-        maxWidth="md"
+        title="Record Portfolio Transaction"
+        subtitle="Automatic weighted cost-basis calculation"
       >
-        <form onSubmit={handleAddSubmit} className="space-y-4">
-          <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Select Cryptocurrency
-            </label>
-            <select
-              value={formSymbol}
-              onChange={(e) => {
-                const s = e.target.value;
-                setFormSymbol(s);
-                const match = coins.find((c) => c.symbol === s);
-                if (match) setFormBuyPrice(match.price.toString());
-              }}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-            >
-              {coins.map((c) => (
-                <option key={c.symbol} value={c.symbol}>
-                  {c.symbol} — {c.name} (${c.price.toLocaleString()})
-                </option>
-              ))}
-            </select>
+        <form onSubmit={handleSaveTrade} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Asset</label>
+              <select
+                value={formSymbol}
+                onChange={(e) => {
+                  const s = e.target.value;
+                  setFormSymbol(s);
+                  const c = coins.find((coin) => coin.symbol === s);
+                  if (c) setFormPrice(String(c.price));
+                }}
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+              >
+                {coins.map((c) => (
+                  <option key={c.symbol} value={c.symbol}>
+                    {c.name} ({c.symbol})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Trade Type</label>
+              <div className="flex rounded-lg overflow-hidden border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setFormType('BUY')}
+                  className={`flex-1 py-2 text-xs font-bold transition-colors cursor-pointer ${
+                    formType === 'BUY' ? 'bg-emerald-600 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}
+                >
+                  BUY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormType('SELL')}
+                  className={`flex-1 py-2 text-xs font-bold transition-colors cursor-pointer ${
+                    formType === 'SELL' ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400'
+                  }`}
+                >
+                  SELL
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Amount ({formSymbol})</label>
+              <input
+                type="number"
+                step="any"
+                value={formAmount}
+                onChange={(e) => setFormAmount(e.target.value)}
+                placeholder="0.00"
+                required
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 block mb-1">Execution Price ($ USD)</label>
+              <input
+                type="number"
+                step="any"
+                value={formPrice}
+                onChange={(e) => setFormPrice(e.target.value)}
+                placeholder="0.00"
+                required
+                className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
+              />
+            </div>
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Holding Amount
-            </label>
-            <input
-              type="number"
-              step="any"
-              placeholder="e.g. 0.5"
-              value={formAmount}
-              onChange={(e) => setFormAmount(e.target.value)}
-              required
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Cost Basis / Buy Price (USD)
-            </label>
-            <input
-              type="number"
-              step="any"
-              placeholder="e.g. 64200"
-              value={formBuyPrice}
-              onChange={(e) => setFormBuyPrice(e.target.value)}
-              required
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
-            />
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block mb-1.5">
-              Research Thesis / Notes (Optional)
-            </label>
+            <label className="text-xs text-slate-400 block mb-1">Notes / Rationale</label>
             <input
               type="text"
-              placeholder="e.g. Accumulation at 200 EMA support"
               value={formNotes}
               onChange={(e) => setFormNotes(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+              placeholder="e.g. Dollar cost average accumulation..."
+              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
-            <Button variant="ghost" type="button" onClick={() => setIsAddModalOpen(false)}>
+          <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-800">
+            <Button variant="ghost" size="sm" type="button" onClick={() => setIsAddModalOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" type="submit">
-              Save Holding
+            <Button variant="primary" size="sm" type="submit">
+              Save Trade
             </Button>
           </div>
         </form>
       </Modal>
-
-      {/* Export Modal */}
-      <ExportModal
-        isOpen={isExportOpen}
-        onClose={() => setIsExportOpen(false)}
-        symbol="PORTFOLIO"
-        data={calculatedHoldings}
-        title="Export Research Portfolio"
-      />
     </div>
   );
 };

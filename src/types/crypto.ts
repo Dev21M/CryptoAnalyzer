@@ -1,11 +1,11 @@
 /**
  * CryptoAnalyzer - Core Types & Interfaces
- * Academic research platform for cryptocurrency time series forecasting
+ * Comprehensive professional cryptocurrency intelligence platform
  */
 
-export type Timeframe = '5m' | '15m' | '1h' | '4h' | '1d' | '1w';
+export type Timeframe = '5m' | '15m' | '1h' | '4h' | '1d' | '1w' | '1m' | '1y' | 'all';
 
-export type PredictionHorizon = '5m' | '15m' | '1h' | '4h' | '1d';
+export type PredictionHorizon = '5m' | '15m' | '1h' | '4h' | '1d' | '24h' | '7d' | '30d';
 
 export type MLArchitecture =
   | 'naive'
@@ -46,6 +46,9 @@ export interface CoinSummary {
   volume24h: number;
   marketCap: number;
   circulatingSupply: number;
+  maxSupply?: number;
+  allTimeHigh?: number;
+  allTimeLow?: number;
   category: 'Layer 1' | 'DeFi' | 'AI & Big Data' | 'Layer 2' | 'Meme' | 'Infra';
   currentRegime: MarketRegime;
   regimeConfidence: number;
@@ -56,6 +59,17 @@ export interface CoinSummary {
     horizon: PredictionHorizon;
   };
   sparkline: number[];
+}
+
+export interface GlobalMarketData {
+  totalMarketCap: number;
+  total24hVolume: number;
+  btcDominance: number;
+  ethDominance: number;
+  marketCapChange24h: number;
+  fearGreedIndex: number;
+  fearGreedSentiment: string;
+  lastUpdated: number;
 }
 
 export interface TechnicalIndicators {
@@ -152,6 +166,7 @@ export interface TransitionMatrixRow {
   transitions: { toRegime: MarketRegime; prob: number }[];
 }
 
+// Portfolio & Transaction Ledger
 export interface PortfolioHolding {
   id: string;
   symbol: string;
@@ -160,6 +175,119 @@ export interface PortfolioHolding {
   buyPrice: number;
   buyDate: string;
   notes?: string;
+}
+
+export interface PortfolioTransaction {
+  id: string;
+  symbol: string;
+  coinName: string;
+  type: 'BUY' | 'SELL';
+  amount: number;
+  pricePerCoin: number;
+  fee: number;
+  totalValue: number;
+  date: string;
+  notes?: string;
+}
+
+// Price Alert
+export interface PriceAlert {
+  id: string;
+  symbol: string;
+  coinName: string;
+  targetPrice: number;
+  condition: 'ABOVE' | 'BELOW' | 'PERCENT_INCREASE' | 'PERCENT_DECREASE';
+  percentageValue?: number;
+  createdAt: string;
+  triggered: boolean;
+  triggeredAt?: string;
+  active: boolean;
+}
+
+// News
+export interface CryptoNewsItem {
+  id: string;
+  title: string;
+  summary: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  category: 'Bitcoin' | 'Ethereum' | 'Altcoins' | 'Blockchain' | 'Regulations' | 'Institutional Investments' | 'Market Updates';
+  sentiment: 'Bullish' | 'Bearish' | 'Neutral';
+  aiTakeaway?: string;
+}
+
+// Price Forecast
+export interface PriceForecastItem {
+  symbol: string;
+  coinName: string;
+  currentPrice: number;
+  horizon: '24h' | '7d' | '30d';
+  estimatedRange: [number, number]; // [min, max]
+  targetPrice: number;
+  expectedTrend: 'Upward' | 'Downward' | 'Consolidation';
+  confidenceLevel: 'Low' | 'Moderate' | 'High';
+  confidencePercent: number;
+  forecastExplanation: string;
+  riskFactors: string[];
+  historicalAccuracy: number;
+}
+
+// Risk Analysis
+export interface CoinRiskItem {
+  symbol: string;
+  name: string;
+  price: number;
+  marketCap: number;
+  riskScore: number; // 0 - 100
+  riskCategory: 'Low Risk' | 'Moderate Risk' | 'High Risk';
+  volatilityScore: number;
+  liquidityScore: number;
+  drawdownScore: number;
+  momentumScore: number;
+  marketCapTier: 'Mega Cap' | 'Large Cap' | 'Mid Cap';
+  methodologyNotes: string;
+}
+
+// Paper Trading Simulator
+export interface SimulatedTrade {
+  id: string;
+  symbol: string;
+  coinName: string;
+  type: 'BUY' | 'SELL';
+  amount: number;
+  price: number;
+  totalCost: number;
+  timestamp: string;
+}
+
+export interface SimulatedAccount {
+  cashBalance: number;
+  initialBalance: number;
+  trades: SimulatedTrade[];
+  holdings: Record<string, { amount: number; avgCost: number }>;
+}
+
+// Learn Crypto
+export interface GlossaryTerm {
+  id: string;
+  term: string;
+  category: 'Fundamentals' | 'Trading' | 'Technical Analysis' | 'Blockchain' | 'Security' | 'DeFi';
+  definition: string;
+  hindiDefinition?: string;
+  example?: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
+  question: string;
+  hindiQuestion?: string;
+  options: string[];
+  hindiOptions?: string[];
+  correctIndex: number;
+  explanation: string;
+  hindiExplanation?: string;
 }
 
 export interface DataProviderStatus {
@@ -192,4 +320,7 @@ export interface UserSettings {
   currency: 'USD' | 'EUR' | 'GBP' | 'INR';
   showDisclaimerBanner: boolean;
   activeProviderPreference: 'auto' | 'fcs' | 'binance' | 'coingecko';
+  enableSoundAlerts?: boolean;
+  enableBrowserAlerts?: boolean;
+  advancedMode?: boolean; // Toggles advanced indicators for power users
 }

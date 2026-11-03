@@ -87,7 +87,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleTheme: () => {
     const currentTheme = get().settings.theme;
-    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const nextTheme: 'dark' | 'light' = currentTheme === 'dark' ? 'light' : 'dark';
     const updated = { ...get().settings, theme: nextTheme };
     saveSettings(updated);
     set({ settings: updated });

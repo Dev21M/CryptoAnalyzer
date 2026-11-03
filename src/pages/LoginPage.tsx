@@ -70,15 +70,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setIsLoading(true);
     try {
-      const result = await sendEmailOtp(email, mode);
+      const result = sendEmailOtp(email, mode, name, institution);
       if (!result.success) {
         setErrorMsg(result.message);
         return;
       }
 
-      if (result.code) {
-        setActiveGeneratedOtp(result.code);
-        onNotifyOtp(result.code, email);
+      if (result.otp) {
+        setActiveGeneratedOtp(result.otp);
+        onNotifyOtp(result.otp, email);
       }
 
       setStep('otp');
@@ -144,9 +144,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
     setIsLoading(true);
     try {
-      const result = await verifyEmailOtp(email, pin, name, institution);
+      const result = verifyEmailOtp(email, pin);
       if (!result.success || !result.user) {
-        setErrorMsg(result.message || 'Invalid or expired OTP token.');
+        setErrorMsg(result.error || 'Invalid or expired OTP token.');
         return;
       }
       onLoginSuccess(result.user);
